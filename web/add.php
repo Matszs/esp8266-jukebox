@@ -1,14 +1,12 @@
 <?php
 $soundsdir = "./sounds/";
 
-if(isset($_POST['submit'])){
-
-echo $_FILES['file']['name'];
-	exec("mpg123 -w ".explode(".".$_FILES['file']['name'])[0].".wav ".$_FILES['file']['tmp_name']); 
-	move_uploaded_file($_FILES['file']['tmp_name'],$soundsdir.$_FILES['file']['name']);
-
-}
-
+if (isset($_POST['submit']))
+	{
+	echo $_FILES['file']['name'];
+	exec("mpg123 -w " . explode("." . $_FILES['file']['name']) [0] . ".wav " . $_FILES['file']['tmp_name']);
+	move_uploaded_file($_FILES['file']['name'], $soundsdir . $_FILES['file']['name']);
+	}
 
 ?>
 <!DOCTYPE html>
@@ -23,4 +21,3 @@ echo $_FILES['file']['name'];
 
 </body>
 </html>
-
