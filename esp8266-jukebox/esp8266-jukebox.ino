@@ -18,7 +18,7 @@ const int oledRST = D1;
 const int oledDC = D2;
 const int oledCS = D8;
 
-// definations
+// definitions
 volatile int lastEncoded = 0;
 volatile long encoderValue = 0;
 SH1106 display(true, oledRST, oledDC, oledCS);
