@@ -51,25 +51,18 @@ void pinTrigger() {
 
   /*if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011)
     encoderValue ++;
-  if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000)
-<<<<<<< HEAD
-    encoderValue --;
-    
-  lastEncoded = encoded; //store this value for next time
-  
-  displayText = encoderValue;
-=======
+    if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000)
+
     encoderValue --;*/
 
-    if(sum == 0b1101)
-      encoderValue++;
-    else if(sum == 0b1110)
-      encoderValue--;
+  if (sum == 0b1101)
+    encoderValue++;
+  else if (sum == 0b1110)
+    encoderValue--;
 
-   lastEncoded = encoded; //store this value for next time
+  lastEncoded = encoded; //store this value for next time
 
-   displayText = encoderValue;
->>>>>>> 10dbc4993d1e184b43d438be030b990eab7dfa8e
+  displayText = encoderValue;
 }
 
 void selectButtonTrigger() {
