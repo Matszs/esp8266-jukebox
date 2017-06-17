@@ -1,7 +1,6 @@
 // source code display: https://github.com/rene-mt/esp8266-oled-sh1106/
 // source code rotary encoder: http://bildr.org/2012/08/rotary-encoder-arduino/
 
-
 #include <Wire.h>
 #include "SSD1306.h"
 #include <SPI.h>
