@@ -81,9 +81,22 @@ void pinTrigger() {
   
 }
 
+void downloadSong(int songNum) {
+  String url = songList[songNum].url;
+  url.replace("http://", "");
+  url.replace(host, "");
+//  Serial.print("requesting url: "); Serial.println(url);
+  sendRequest(host, url);
+  while(client.available()){
+    String line = client.readStringUntil('\r');
+    Serial.print(line);
+  }
+}
+
 void selectButtonTrigger() {
   displayText = "KNOP";
   Serial.println("KNOP");
+  downloadSong(selectedSong);
 }
 
 void drawFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
@@ -138,15 +151,17 @@ void fillSongListFromRequest(boolean _print) {
       }
     }
   }
-}
+}             // http://jukebox.derfu.nl/sounds/tanken.wav
 
 void sendRequest(const char* _host, String _url) {
+  Serial.print("host: "); Serial.println(_host);
+  Serial.print("url: "); Serial.println(_url);
   client.print(String("GET ") + _url + " HTTP/1.1\r\n" +
                "Host: " + _host + "\r\n" +
                "Connection: close\r\n\r\n");
   unsigned long timeout = millis();
   while (client.available() == 0) {
-    if (millis() - timeout > 5000) {
+    if (millis() - timeout > 600000) {
       Serial.println(">>> Client Timeout !");
       client.stop();
       return;
@@ -169,11 +184,12 @@ void connectToWifi(const char* _ssid, const char* _password) {
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
 }
-
+  char thingy[1];
 
 void setup() {
   // Debugging
   Serial.begin(9600);
+  Serial.println("Begin serial");
 
   pinMode(encoderPin1, INPUT);
   pinMode(encoderPin2, INPUT);
@@ -196,12 +212,28 @@ void setup() {
     return;
   }
   String url = "/list.php?json=1";
+  url = "/sounds/thelist.wav";
+  Serial.println("Go send request");
   sendRequest(host, url);
-  fillSongListFromRequest(true);
+  Serial.println("Create character array");
+
+  Serial.println("begin reading request");
+  while(client.available()){
+    client.readBytes(thingy, 1);
+    Serial.print(thingy[0]);
+  }
+  Serial.println("request done");
+//  fillSongListFromRequest(true);
+
+//  downloadSong(selectedSong);
 }
 
 void loop() {
   //Serial.println((digitalRead(selectButton) == HIGH ? "true" : "false"));
   //Serial.println("Loop");
   ui.update();
+  while(client.available()){
+    client.readBytes(thingy, 1);
+//    Serial.print(thingy[0]);
+  }
 }
