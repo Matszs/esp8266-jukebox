@@ -35,9 +35,10 @@ const char* password = "esp8266-jukebox";
 WiFiClient client;
 const char* host = "jukebox.derfu.nl";
 Vector<Songs> songList;
-String displayText = "kaas";
+String displayText = "esp8266-Jukebox";
 SH1106Spi display(oledRST, oledDC);
 OLEDDisplayUi ui(&display);
+int selectedSong = 0;
 
 void pinTrigger() {
   int MSB = digitalRead(encoderPin1); // MSB = most significant bit
@@ -61,7 +62,23 @@ void pinTrigger() {
 
   lastEncoded = encoded; //store this value for next time
 
-  displayText = encoderValue;
+  //displayText = encoderValue;
+
+  selectedSong = (encoderValue / 2);
+  Serial.println((encoderValue / 2));
+  
+  if(selectedSong > (songList.size() - 1) && encoderValue > 0) {
+    selectedSong = 0;
+    encoderValue = 0;
+  } else if(selectedSong < 0) {
+    selectedSong = songList.size() - 1;
+    encoderValue = (selectedSong * 2);
+  }
+
+  Serial.println(selectedSong);
+
+  displayText = String(songList[selectedSong].id) + ". " + songList[selectedSong].title;
+  
 }
 
 void selectButtonTrigger() {
@@ -73,8 +90,8 @@ void drawFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16
   // Text alignment demo
   display->setFont(ArialMT_Plain_16);
 
-  display->setTextAlignment(TEXT_ALIGN_CENTER);
-  display->drawString(86 + x, 22 + y, displayText);
+  display->setTextAlignment(TEXT_ALIGN_LEFT);
+  display->drawString(x, 22 + y, displayText);
 }
 
 FrameCallback frames[] = { drawFrame };
