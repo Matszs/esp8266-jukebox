@@ -38,7 +38,7 @@ void pinTrigger() {
   int encoded = (MSB << 1) | LSB; // converting the 2 pin value to single number
   int sum  = (lastEncoded << 2) | encoded; // adding it to the previous encoded value
 
-  Serial.println(sum, BIN);
+  //Serial.println(sum, BIN);
 
   /*if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011)
     encoderValue ++;
