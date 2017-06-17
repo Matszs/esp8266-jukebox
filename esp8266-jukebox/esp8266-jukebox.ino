@@ -9,6 +9,7 @@
 #include "Libraries/Vector/Vector.h"
 #include "SH1106SPi.h"
 #include "OLEDDisplayUi.h"
+#include "i2sAudio.cpp"
 
 struct Songs {
   char id[5];
@@ -174,6 +175,10 @@ void connectToWifi(const char* _ssid, const char* _password) {
 void setup() {
   // Debugging
   Serial.begin(9600);
+
+  // I2S init code voor audio genereren.
+  i2s_begin();
+  i2s_set_rate(44100);
 
   pinMode(encoderPin1, INPUT);
   pinMode(encoderPin2, INPUT);
