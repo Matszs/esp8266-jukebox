@@ -5,6 +5,8 @@
 #include <SPI.h>
 #include "SH1106.h"
 #include "SH1106Ui.h"
+#include "Libraries/ArduinoJson.h"
+#include <ESP8266WiFi.h>
 
 
 // pins
@@ -23,7 +25,12 @@ volatile int lastEncoded = 0;
 volatile long encoderValue = 0;
 SH1106 display(true, oledRST, oledDC, oledCS);
 SH1106Ui ui(&display);
-
+const char* ssid = "jukebox";
+const char* password = "esp8266-jukebox";
+WiFiClient client;
+const char* host = "jukebox.derfu.nl";
+StaticJsonBuffer<500> songListBuffer;
+JsonArray& songList = songListBuffer.createArray();
 
 void pinTrigger() {
   int MSB = digitalRead(encoderPin1); // MSB = most significant bit
@@ -37,7 +44,7 @@ void pinTrigger() {
   else if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000)
     encoderValue --;
 
-   lastEncoded = encoded; //store this value for next time
+  lastEncoded = encoded; //store this value for next time
 }
 
 void setupDisplay() {
@@ -50,6 +57,54 @@ void setupDisplay() {
   ui.init();
 }
 
+void getJsonFromRequest(JsonArray& arr, boolean _print) {
+  while (client.available()) {
+    String line = client.readStringUntil('\r');
+    if (line.startsWith("\n[")) {
+      line.remove(0, 1);
+      DynamicJsonBuffer jsonBuffer(512);
+      arr = jsonBuffer.parseArray(line);
+      if (_print) {
+        Serial.print("JSON Objects: ");
+        Serial.println(jsonArray.size());
+        jsonArray.prettyPrintTo(Serial);
+      }
+      return jsonArray;
+    }
+  }
+}
+
+void sendRequest(const char* _host, String _url) {
+  client.print(String("GET ") + _url + " HTTP/1.1\r\n" +
+               "Host: " + _host + "\r\n" +
+               "Connection: close\r\n\r\n");
+  unsigned long timeout = millis();
+  while (client.available() == 0) {
+    if (millis() - timeout > 5000) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+}
+
+void connectToWifi(const char* _ssid, const char* _password) {
+  Serial.print("Connecting to ");
+  Serial.println(_ssid);
+  
+  WiFi.begin(_ssid, _password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  
+  Serial.println("");
+  Serial.println("WiFi connected");
+  Serial.println("IP address: ");
+  Serial.println(WiFi.localIP());
+}
+
+
 void setup() {
   // Debugging
   Serial.begin(9600);
@@ -60,11 +115,20 @@ void setup() {
   // Turn on pull-up resistors
   digitalWrite(encoderPin1, HIGH);
   digitalWrite(encoderPin2, HIGH);
-  
+
   attachInterrupt(digitalPinToInterrupt(encoderPin1), pinTrigger, CHANGE);
   attachInterrupt(digitalPinToInterrupt(encoderPin2), pinTrigger, CHANGE);
 
   setupDisplay();
+
+  connectToWifi(ssid, password);
+  if (!client.connect(host, 80)) {
+    Serial.println("connection failed");
+    return;
+  }
+  String url = "/list.php?json=1";
+  sendRequest(host, url);
+  &songList = getJsonFromRequest(true);
 }
 
 void loop() {
