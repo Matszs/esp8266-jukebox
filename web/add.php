@@ -9,14 +9,14 @@ $soundsdir = "./sounds/";
 
 if (isset($_POST['submit'])) {
     $title = $_POST['title'];
-    $execmpg123 = 'mpg123 -w /var/www/esp8266-jukebox/web/sounds/' . $title . '.wav --8bit --rate 8000 --mono ' . $_FILES['file']['tmp_name'];
+    $execmpg123 = 'mpg123 -w /var/www/esp8266-jukebox/web/sounds/' . strtolower($title) . '.wav --8bit --rate 8000 --mono ' . $_FILES['file']['tmp_name'];
 
     //echo $execmpg123;
     exec($execmpg123);
 
 
     $qry = $db->prepare('INSERT INTO soundslib (title, url) VALUES (?, ?)');
-    $output = $qry->execute(array($title,$title));
+    $output = $qry->execute(array(strtolower($title),"http://jukebox.derfu.nl/sounds/".$title.".wav"));
 
     print_r($qry->errorInfo());
 
