@@ -5,9 +5,15 @@
 #include <SPI.h>
 #include "SH1106.h"
 #include "SH1106Ui.h"
-#include "Libraries/ArduinoJson.h"
+#include "Libraries/ArduinoJson/ArduinoJson.h"
 #include <ESP8266WiFi.h>
+#include "Libraries/Vector/Vector.h"
 
+struct Songs {
+  char id[5];
+  char title[30];
+  char url[60];
+};
 
 // pins
 const int encoderPin1 = D3;
@@ -29,8 +35,7 @@ const char* ssid = "jukebox";
 const char* password = "esp8266-jukebox";
 WiFiClient client;
 const char* host = "jukebox.derfu.nl";
-StaticJsonBuffer<500> songListBuffer;
-JsonArray& songList = songListBuffer.createArray();
+Vector<Songs> songList;
 
 void pinTrigger() {
   int MSB = digitalRead(encoderPin1); // MSB = most significant bit
@@ -57,19 +62,29 @@ void setupDisplay() {
   ui.init();
 }
 
-void getJsonFromRequest(JsonArray& arr, boolean _print) {
+void fillSongListFromRequest(boolean _print) {
   while (client.available()) {
     String line = client.readStringUntil('\r');
     if (line.startsWith("\n[")) {
       line.remove(0, 1);
       DynamicJsonBuffer jsonBuffer(512);
-      arr = jsonBuffer.parseArray(line);
-      if (_print) {
-        Serial.print("JSON Objects: ");
-        Serial.println(jsonArray.size());
-        jsonArray.prettyPrintTo(Serial);
+      JsonArray& jsonArray = jsonBuffer.parseArray(line);
+      for (int i = 0; i < jsonArray.size(); i++ ) {
+        struct Songs song;
+        strcpy( song.id, jsonArray[i]["id"] );
+        strcpy( song.title, jsonArray[i]["title"] );
+        strcpy( song.url, jsonArray[i]["url"] );
+        songList.push_back(song);
       }
-      return jsonArray;
+      if (_print) {
+        Serial.print("songList length: "); Serial.println(songList.size());
+        for (int i = 0; i < songList.size(); i++ ) {
+          Serial.print("id:\t"); Serial.println(songList[i].id);
+          Serial.print("title:\t"); Serial.println(songList[i].title);
+          Serial.print("url:\t"); Serial.println(songList[i].url);
+          Serial.println("");
+        }
+      }
     }
   }
 }
@@ -91,13 +106,13 @@ void sendRequest(const char* _host, String _url) {
 void connectToWifi(const char* _ssid, const char* _password) {
   Serial.print("Connecting to ");
   Serial.println(_ssid);
-  
+
   WiFi.begin(_ssid, _password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
     Serial.print(".");
   }
-  
+
   Serial.println("");
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
@@ -128,7 +143,7 @@ void setup() {
   }
   String url = "/list.php?json=1";
   sendRequest(host, url);
-  &songList = getJsonFromRequest(true);
+  fillSongListFromRequest(true);
 }
 
 void loop() {
