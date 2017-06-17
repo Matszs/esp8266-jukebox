@@ -16,7 +16,7 @@ if (isset($_POST['submit'])) {
 
 
     $qry = $db->prepare('INSERT INTO soundslib (title, url) VALUES (?, ?)');
-    $output = $qry->execute(array(strtolower($title),"http://jukebox.derfu.nl/sounds/".$title.".wav"));
+    $output = $qry->execute(array(strtolower($title),"http://jukebox.derfu.nl/sounds/".strtolower($title).".wav"));
 
     print_r($qry->errorInfo());
 
