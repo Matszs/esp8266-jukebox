@@ -3,12 +3,14 @@
 
 #include <Wire.h>
 #include "SSD1306.h"
+#include <i2s.h>
 #include <SPI.h>
 #include "Libraries/ArduinoJson/ArduinoJson.h"
 #include <ESP8266WiFi.h>
 #include "Libraries/Vector/Vector.h"
 #include "SH1106SPi.h"
 #include "OLEDDisplayUi.h"
+
 
 struct Songs {
   char id[5];
@@ -40,6 +42,42 @@ SH1106Spi display(oledRST, oledDC);
 OLEDDisplayUi ui(&display);
 int selectedSong = 0;
 
+#define SONG_DATA_LENGTH 25000
+
+char songData[SONG_DATA_LENGTH];
+
+
+void downloadSong(int songNum) {
+  String url = songList[songNum].url;
+  url.replace("http://", "");
+  url.replace(host, "");
+
+  sendRequest(host, url);
+
+  Serial.println("DOWNLOADEN BITCHHHH");
+
+  byte lastDataByte = '\0';
+  boolean found = false;
+  int songDataIndex = 0;
+
+  while (client.available()) {
+    byte dataByte = client.read();
+
+    if (!found && dataByte == '\r' && lastDataByte == '\n')
+      found = true;
+
+    if (found && dataByte != '\n' && songDataIndex < SONG_DATA_LENGTH) {
+      songData[songDataIndex++] = dataByte;
+      //Serial.println(dataByte, BIN); // DEBUG: data print
+      delay(1);
+    }
+
+    lastDataByte = dataByte;
+  }
+
+  songData[songDataIndex] = '\0';
+}
+
 void pinTrigger() {
   int MSB = digitalRead(encoderPin1); // MSB = most significant bit
   int LSB = digitalRead(encoderPin2); // LSB = least significant bit
@@ -66,11 +104,11 @@ void pinTrigger() {
 
   selectedSong = (encoderValue / 2);
   Serial.println((encoderValue / 2));
-  
-  if(selectedSong > (songList.size() - 1) && encoderValue > 0) {
+
+  if (selectedSong > (songList.size() - 1) && encoderValue > 0) {
     selectedSong = 0;
     encoderValue = 0;
-  } else if(selectedSong < 0) {
+  } else if (selectedSong < 0) {
     selectedSong = songList.size() - 1;
     encoderValue = (selectedSong * 2);
   }
@@ -78,7 +116,9 @@ void pinTrigger() {
   Serial.println(selectedSong);
 
   displayText = String(songList[selectedSong].id) + ". " + songList[selectedSong].title;
-  
+  downloadSong(selectedSong);
+
+
 }
 
 void selectButtonTrigger() {
@@ -140,10 +180,35 @@ void fillSongListFromRequest(boolean _print) {
   }
 }
 
-void sendRequest(const char* _host, String _url) {
+/*void sendRequest(const char* _host, String _url) {
+  Serial.print("host: "); Serial.println(_host);
+  Serial.print("url: "); Serial.println(_url);
   client.print(String("GET ") + _url + " HTTP/1.1\r\n" +
                "Host: " + _host + "\r\n" +
                "Connection: close\r\n\r\n");
+  unsigned long timeout = millis();
+
+
+  while (client.available() == 0) {
+    if (millis() - timeout > 5000) {
+      Serial.println(">>> Client Timeout !");
+      client.stop();
+      return;
+    }
+  }
+  }*/
+
+void sendRequest(const char* _host, String _url) {
+  /*if (!client.connect(host, 80)) {
+    Serial.println("connection failed");
+    return;
+    }*/
+
+  Serial.print("host: "); Serial.println(_host);
+  Serial.print("url: "); Serial.println(_url);
+  client.print(String("GET ") + _url + " HTTP/1.1\r\n" +
+               "Host: " + _host + "\r\n" +
+               "Connection: keep-alive\r\n\r\n");
   unsigned long timeout = millis();
   while (client.available() == 0) {
     if (millis() - timeout > 5000) {
@@ -170,10 +235,44 @@ void connectToWifi(const char* _ssid, const char* _password) {
   Serial.println(WiFi.localIP());
 }
 
+void playSong() {
+
+  Serial.println("Play the song of my people");
+
+  for (int i = 0; i < (SONG_DATA_LENGTH - 1); i++) {
+    uint32_t data = 0;
+    //Right Channel
+    data |= (uint32_t)(songData[i]) << 24;
+    data |= (uint32_t)(songData[++i]) << 16;
+    i = i + 2;
+    
+    //Left Channel
+    data |= (uint32_t)(songData[i]) << 8;
+    data |= songData[++i];
+    i = i + 1;
+
+    //Serial.println(songData[i], BIN);
+
+    i2s_write_sample(data);
+    delayMicroseconds(50);
+  }
+
+  Serial.println("heksenjacht");
+}
+
 
 void setup() {
   // Debugging
   Serial.begin(9600);
+
+  while (!Serial) {
+    ; // wait for serial port to connect. Needed for native USB
+  }
+
+  // I2S init code voor audio genereren.
+  i2s_begin();
+  pinMode(15, OUTPUT); // lifehacks
+  i2s_set_rate(44100);
 
   pinMode(encoderPin1, INPUT);
   pinMode(encoderPin2, INPUT);
@@ -190,18 +289,33 @@ void setup() {
 
   setupDisplay();
 
+  delay(100);
+  displayText = "Starting up";
+  ui.update();
+  delay(100);
+
   connectToWifi(ssid, password);
   if (!client.connect(host, 80)) {
     Serial.println("connection failed");
     return;
   }
+
   String url = "/list.php?json=1";
   sendRequest(host, url);
   fillSongListFromRequest(true);
+
+  downloadSong(4);
+  
+  delay(1000);
+  
+  playSong();
 }
 
 void loop() {
   //Serial.println((digitalRead(selectButton) == HIGH ? "true" : "false"));
   //Serial.println("Loop");
   ui.update();
+
+  delay(1000);
+  playSong();
 }
