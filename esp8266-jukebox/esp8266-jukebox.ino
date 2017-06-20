@@ -38,44 +38,26 @@ WiFiClient client;
 const char* host = "jukebox.derfu.nl";
 Vector<Songs> songList;
 String displayText = "esp8266-Jukebox";
+String displayTextSecond = "";
 SH1106Spi display(oledRST, oledDC);
 OLEDDisplayUi ui(&display);
-int selectedSong = 0;
-
-#define SONG_DATA_LENGTH 25000
-
-char songData[SONG_DATA_LENGTH];
+volatile int selectedSong = 0;
+volatile boolean play = true;
 
 
-void downloadSong(int songNum) {
-  String url = songList[songNum].url;
-  url.replace("http://", "");
-  url.replace(host, "");
 
-  sendRequest(host, url);
+void setDisplayText(String txt, String secondTxt) {
+  displayText = txt;
+  displayTextSecond = secondTxt;
+  ui.update();
+  delay(100);
+}
 
-  Serial.println("DOWNLOADEN BITCHHHH");
-
-  byte lastDataByte = '\0';
-  boolean found = false;
-  int songDataIndex = 0;
-
-  while (client.available()) {
-    byte dataByte = client.read();
-
-    if (!found && dataByte == '\r' && lastDataByte == '\n')
-      found = true;
-
-    if (found && dataByte != '\n' && songDataIndex < SONG_DATA_LENGTH) {
-      songData[songDataIndex++] = dataByte;
-      //Serial.println(dataByte, BIN); // DEBUG: data print
-      delay(1);
-    }
-
-    lastDataByte = dataByte;
-  }
-
-  songData[songDataIndex] = '\0';
+void setDisplayText(String txt) {
+  displayText = txt;
+  displayTextSecond = "";
+  ui.update();
+  delay(100);
 }
 
 void pinTrigger() {
@@ -84,14 +66,6 @@ void pinTrigger() {
 
   int encoded = (MSB << 1) | LSB; // converting the 2 pin value to single number
   int sum  = (lastEncoded << 2) | encoded; // adding it to the previous encoded value
-
-  //Serial.println(sum, BIN);
-
-  /*if (sum == 0b1101 || sum == 0b0100 || sum == 0b0010 || sum == 0b1011)
-    encoderValue ++;
-    if (sum == 0b1110 || sum == 0b0111 || sum == 0b0001 || sum == 0b1000)
-
-    encoderValue --;*/
 
   if (sum == 0b1101)
     encoderValue++;
@@ -103,7 +77,9 @@ void pinTrigger() {
   //displayText = encoderValue;
 
   selectedSong = (encoderValue / 2);
-  Serial.println((encoderValue / 2));
+  //Serial.println((encoderValue / 2));
+
+  play = false;
 
   if (selectedSong > (songList.size() - 1) && encoderValue > 0) {
     selectedSong = 0;
@@ -114,16 +90,11 @@ void pinTrigger() {
   }
 
   Serial.println(selectedSong);
-
-  displayText = String(songList[selectedSong].id) + ". " + songList[selectedSong].title;
-  downloadSong(selectedSong);
-
-
 }
 
 void selectButtonTrigger() {
-  displayText = "KNOP";
   Serial.println("KNOP");
+  play = !play;
 }
 
 void drawFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16_t y) {
@@ -131,23 +102,23 @@ void drawFrame(OLEDDisplay *display, OLEDDisplayUiState* state, int16_t x, int16
   display->setFont(ArialMT_Plain_16);
 
   display->setTextAlignment(TEXT_ALIGN_LEFT);
-  display->drawString(x, 22 + y, displayText);
+  if(displayTextSecond.length() > 0) {
+    display->drawString(x, 10 + y, displayText);
+    display->drawString(x, 27 + y, displayTextSecond);
+  } else {
+    display->drawString(x, 22 + y, displayText);
+  }
 }
 
 FrameCallback frames[] = { drawFrame };
-
-// how many frames are there?
 int frameCount = 1;
-
 
 void setupDisplay() {
   ui.setTargetFPS(30);
 
   ui.disableAllIndicators();
   ui.disableAutoTransition();
-
   ui.setFrames(frames, frameCount);
-
   ui.init();
 
   display.flipScreenVertically();
@@ -180,30 +151,7 @@ void fillSongListFromRequest(boolean _print) {
   }
 }
 
-/*void sendRequest(const char* _host, String _url) {
-  Serial.print("host: "); Serial.println(_host);
-  Serial.print("url: "); Serial.println(_url);
-  client.print(String("GET ") + _url + " HTTP/1.1\r\n" +
-               "Host: " + _host + "\r\n" +
-               "Connection: close\r\n\r\n");
-  unsigned long timeout = millis();
-
-
-  while (client.available() == 0) {
-    if (millis() - timeout > 5000) {
-      Serial.println(">>> Client Timeout !");
-      client.stop();
-      return;
-    }
-  }
-  }*/
-
 void sendRequest(const char* _host, String _url) {
-  /*if (!client.connect(host, 80)) {
-    Serial.println("connection failed");
-    return;
-    }*/
-
   Serial.print("host: "); Serial.println(_host);
   Serial.print("url: "); Serial.println(_url);
   client.print(String("GET ") + _url + " HTTP/1.1\r\n" +
@@ -223,6 +171,9 @@ void connectToWifi(const char* _ssid, const char* _password) {
   Serial.print("Connecting to ");
   Serial.println(_ssid);
 
+  setDisplayText(String("Connecting Wifi"), _ssid);
+  delay(100);
+
   WiFi.begin(_ssid, _password);
   while (WiFi.status() != WL_CONNECTED) {
     delay(500);
@@ -233,46 +184,71 @@ void connectToWifi(const char* _ssid, const char* _password) {
   Serial.println("WiFi connected");
   Serial.println("IP address: ");
   Serial.println(WiFi.localIP());
+
+  setDisplayText(String("IP ") + WiFi.localIP().toString());
+  delay(100);
+
 }
 
-void playSong() {
+bool ICACHE_FLASH_ATTR i2s_write_lr_nb(int16_t left, int16_t right){
+  int sample = right & 0xFFFF;
+  sample = sample << 16;
+  sample |= left & 0xFFFF;
+  return i2s_write_sample(sample);
+}
 
-  Serial.println("Play the song of my people");
 
-  for (int i = 0; i < (SONG_DATA_LENGTH - 1); i++) {
-    uint32_t data = 0;
-    //Right Channel
-    data |= (uint32_t)(songData[i]) << 24;
-    data |= (uint32_t)(songData[++i]) << 16;
-    i = i + 2;
-    
-    //Left Channel
-    data |= (uint32_t)(songData[i]) << 8;
-    data |= songData[++i];
-    i = i + 1;
+void playSong(int songIndex) {
 
-    //Serial.println(songData[i], BIN);
+  struct Songs song = songList[songIndex];
 
-    i2s_write_sample(data);
-    delayMicroseconds(50);
+  setDisplayText(String("Fetching ") + song.title);
+
+
+  String url = song.url;
+  url.replace("http://", "");
+  url.replace(host, "");
+
+  sendRequest(host, url);
+
+  byte lastDataByte = '\0';
+  boolean found = false;
+  int songDataIndex = 0;
+  
+  // I2S init code voor audio genereren.
+  i2s_begin();
+  //pinMode(15, OUTPUT); // lifehacks
+  i2s_set_rate(11025);
+
+  while (client.available()) {
+    byte dataByte = client.read();
+
+    if (!found && dataByte == '\r' && lastDataByte == '\n') {
+      found = true;
+      setDisplayText(String("Playing"), song.title);
+    }
+
+    if (found && dataByte != '\n') {
+      byte dataByteSecond = client.read();
+
+      int16_t pcm = dataByte << 8 | dataByteSecond;
+
+      boolean write = i2s_write_lr_nb(pcm, pcm);
+    }
+
+    lastDataByte = dataByte;
   }
 
-  Serial.println("heksenjacht");
+  i2s_end();
+  setDisplayText(String("Done playing"));
+  Serial.println("done");
 }
-
 
 void setup() {
   // Debugging
   Serial.begin(9600);
 
-  while (!Serial) {
-    ; // wait for serial port to connect. Needed for native USB
-  }
-
-  // I2S init code voor audio genereren.
-  i2s_begin();
-  pinMode(15, OUTPUT); // lifehacks
-  i2s_set_rate(44100);
+  WiFi.persistent(false); // prevent exception when connecting to Wifi network
 
   pinMode(encoderPin1, INPUT);
   pinMode(encoderPin2, INPUT);
@@ -289,12 +265,10 @@ void setup() {
 
   setupDisplay();
 
-  delay(100);
-  displayText = "Starting up";
-  ui.update();
-  delay(100);
+  setDisplayText("Starting...");
 
   connectToWifi(ssid, password);
+  
   if (!client.connect(host, 80)) {
     Serial.println("connection failed");
     return;
@@ -303,19 +277,17 @@ void setup() {
   String url = "/list.php?json=1";
   sendRequest(host, url);
   fillSongListFromRequest(true);
-
-  downloadSong(4);
   
   delay(1000);
-  
-  playSong();
 }
 
 void loop() {
-  //Serial.println((digitalRead(selectButton) == HIGH ? "true" : "false"));
-  //Serial.println("Loop");
-  ui.update();
-
-  delay(1000);
-  playSong();
+  if(play) {
+    playSong(selectedSong);
+    play = false;
+  } else {
+    struct Songs song = songList[selectedSong];
+    setDisplayText(String("Selected "), song.title);
+    delay(300);
+  }
 }
